@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Jarvis Asistente de Trading</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #0c0c0c;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: start;
+      height: 100vh;
+      padding-top: 30px;
+    }
+    button {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    #status {
+      margin-top: 10px;
+      color: #0f0;
+    }
+    #preview {
+      margin-top: 20px;
+      border: 2px solid #555;
+      width: 640px;
+      height: 360px;
+      object-fit: contain;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎯 JARVIS - Asistente Inteligente de Trading</h1>
+  <video id="preview" autoplay muted></video>
+  <div>
+    <button onclick="toggleMic()">🎙️ Hablar / Silenciar</button>
+    <button onclick="stopInteraction()">❌ Finalizar Conversación</button>
+  </div>
+  <p id="status">Estado: Esperando comandos...</p>
+
+  <script>
+    // Configuración
+    const GEMINI_API_KEY = 'AIzaSyAQOnN-SaPw-Tn3gQDl-pp-_OCR5FkR4Fk'; // Reemplaza con tu clave de Gemini
+    const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+    const PALABRAS_CLAVE = ['analiza', 'revisa', 'observa', 'estrategia', 'riesgo', 'vela', 'índice', 'operar', 'entrada', 'salida'];
+    const MAX_FRAMES = 10;
+    const INTERVALO_CAPTURA = 10000;
+
+    // Estado
+    let reconocimiento;
+    let hablando = false;
+    let frames = [];
+
+    // Captura pantalla
+    async function iniciarCapturaPantalla() {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        document.getElementById('preview').srcObject = stream;
+
+        const video = document.getElementById('preview');
+        const canvas = document.createElement('canvas');
+        const contexto = canvas.getContext('2d');
+
+        setInterval(() => {
+          if (frames.length >= MAX_FRAMES) frames.shift(); // Eliminar el más antiguo
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          contexto.drawImage(video, 0, 0);
+          const dataURL = canvas.toDataURL('image/png');
+          frames.push(dataURL);
+          analizarFrame(dataURL); // Analizar automáticamente
+        }, INTERVALO_CAPTURA);
+      } catch (err) {
+        alert('Error capturando pantalla: ' + err);
+      }
+    }
+
+    // Análisis con Gemini
+    async function analizarFrame(imagenBase64) {
+      const prompt = {
+        contents: [{
+          parts: [
+            { text: 'Analiza este gráfico y dime si es buen momento para operar:' },
+            { inlineData: { mimeType: 'image/png', data: imagenBase64.split(',')[1] } }
+          ]
+        }]
+      };
+      const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(prompt)
+      });
+      const data = await res.json();
+      if (data.candidates?.length) {
+        hablar(data.candidates[0].content.parts[0].text);
+      }
+    }
+
+    // Voz natural (TTS)
+    function hablar(texto) {
+      const limpio = texto.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\"\']/g, '');
+      const speech = new SpeechSynthesisUtterance(limpio);
+      speech.lang = 'es-ES';
+      window.speechSynthesis.speak(speech);
+    }
+
+    // Reconocimiento de voz
+    function toggleMic() {
+      if (!hablando) {
+        reconocimiento = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        reconocimiento.lang = 'es-ES';
+        reconocimiento.continuous = true;
+        reconocimiento.interimResults = false;
+
+        reconocimiento.onresult = (e) => {
+          const texto = e.results[e.results.length - 1][0].transcript.toLowerCase();
+          document.getElementById('status').innerText = 'Comando detectado: ' + texto;
+          if (PALABRAS_CLAVE.some(p => texto.includes(p))) {
+            const ultimaImagen = frames[frames.length - 1];
+            if (ultimaImagen) analizarFrame(ultimaImagen);
+            else hablar('Aún no hay capturas para analizar');
+          } else {
+            hablar('Comando no reconocido, intenta de nuevo');
+          }
+        };
+
+        reconocimiento.start();
+        hablando = true;
+        document.getElementById('status').innerText = '🎤 Micrófono activado. Di tu comando...';
+      } else {
+        reconocimiento.stop();
+        hablando = false;
+        document.getElementById('status').innerText = '🔇 Micrófono desactivado.';
+      }
+    }
+
+    // Finalizar todo
+    function stopInteraction() {
+      if (hablando) reconocimiento.stop();
+      window.speechSynthesis.cancel();
+      hablando = false;
+      document.getElementById('status').innerText = '❌ Interacción finalizada.';
+    }
+
+    // Pedir permisos al inicio
+    window.onload = () => {
+      iniciarCapturaPantalla();
+      toggleMic();
+    };
+  </script>
+</body>
+</html>
