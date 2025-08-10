@@ -5,7 +5,7 @@ import pytesseract
 from PIL import Image
 from pdf2image import convert_from_bytes
 from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import ChatAction  # ✅ Corrección aquí
+from telegram.constants import ChatAction
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -25,8 +25,9 @@ GEMINI_MODEL = "models/gemini-2.5-flash"
 configure(api_key=GEMINI_API_KEY)
 model = GenerativeModel(GEMINI_MODEL)
 
-# Ruta de Tesseract
-pytesseract.pytesseract.tesseract_cmd = r"C:\Users\Hunter Garcia\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
+# Rutas para servidor Linux (VPS)
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+POPPLER_PATH = "/usr/bin"
 
 # Memoria de archivos
 user_files_memory = {}
@@ -103,7 +104,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         extracted_text = ""
         if file_name.lower().endswith(".pdf"):
-            images = convert_from_bytes(file_bytes, poppler_path=r"C:\poppler\Library\bin")
+            images = convert_from_bytes(file_bytes, poppler_path=POPPLER_PATH)
             for img in images:
                 text = pytesseract.image_to_string(img)
                 extracted_text += text + "\n"
